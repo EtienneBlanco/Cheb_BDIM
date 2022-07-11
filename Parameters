@@ -1,0 +1,72 @@
+/////////////////////
+//                 //
+//   Parameters    //
+//                 //
+/////////////////////
+
+//In terms of formating of this file, what counts is that the lines that set one parameter
+//begin as "name = value " (comments can be added at the end of the line)
+//If a parameter isn't set here, it will receive a default value
+//Also, some variable have indicated dimension, changing it won't be taken into account
+
+//Type of evolution :
+// 0 -> pure gluons
+// 1 -> gluons and quarks
+evo = 1
+
+//Normalization of the Fragmentation Functions obtained (done after evolution)
+// 0 -> none
+// 1 -> the integral of D_g(x)+D_S(x) is set to 1
+// 2 -> the integral of (D_g(x)+D_S(x))/x is set to 1
+// 3 -> each integral D_f(x) is set to 1 (when not null)
+// 4 -> each integral of D_f(x)/x is set to 1 (when not null)
+norm = 2
+//option 1 & 3 and 2 & 4 are the same in the pure gluon case 
+
+//Positivity of the distributions obtained
+// 0 -> negative values are kept
+// 1 -> Force positivity : negative values are set to 0
+positivity = 0
+
+//Number of nodes / number of polynomials in the Chebyshev expansion
+Nx = 250
+
+//Regulator for the logarithmic bijection from [0,1] to [-1,1]
+//(if eps = 0, a linear bijection is used)
+eps = 1e-4
+
+//Initial proper time
+tau0 = 0
+
+//Proper time step in the Euler method
+dtau = 1e-6
+
+//Number of proper time steps
+Ntau = 5e5
+//alternatively, the number of time steps can be set by fixing the time of the last step :
+//Ftau = 0.1
+//Remark : when using Ftau, dtau and tau0 have to be set first.
+
+//Number of proper time steps to write in the result grid
+//(if Nt_w > Ntau, Nt_w will be set to Ntau in the program)
+Nt_w = 1e3
+
+//The initial distribution is defined as a sum of narrow Gaussian with the following coefficients :
+C_g0 = 1 //for the gluon distribution
+C_S0 = 0 //for the quark singlet distribution
+C_NS0 = 0 //for the quark non-singlet distribution
+//this coefficient are usefull only if evo = 1, 
+//if evo = 0 (pure gluon) they will be forced the following way : C_g0=1, C_S0=C_NS0=0
+//Each Gaussian has the following width :
+Ieps = 1e-3
+//This way, you can mimic an initial gluon jet using C_g0=1, C_S0=C_NS0=0...
+
+//filename to be used for the result grid file (without space)
+gridname = Results/cheb_avg_g2
+//a suffix is added to this name :
+// -'gonly' for the gluon distribution in the pure gluon case
+// -'g' for the gluon distribution
+// -'S' for the quark singlet distribution
+// -'NS' for the quark non-singlet distribution
+//
+//Also, the parameters used are writen in the file gridname+"_parameters"
