@@ -18,6 +18,7 @@
 void cheb_init_S_chebint(double *&X, double **&T, double **&S_gg, double **&S_gS, double **&S_SS, double **&S_Sg, double **&S_NSNS, int N);
 void cheb_init_S_chebint_log(double *&X, double **&T, double **&S_gg, double **&S_gS, double **&S_SS, double **&S_Sg, double **&S_NSNS, int N, double eps);
 
+void write_D(double *&X, double **&T, double *&D_g, double *&D_S, double *&D_NS, double t, ofstream &g_grid, ofstream &S_grid, ofstream &NS_grid, parameters param);
 void cheb_Euler(double *&X, double **&T, double *&D_g, double *&D_S, double *&D_NS, double **&S_gg, double **&S_gS, double **&S_SS, double **&S_Sg, double **&S_NSNS, ofstream &g_grid, ofstream &S_grid, ofstream &NS_grid, parameters param);
 
 double normalize_D(double *&X, double **&T, double D_g[], double D_S[], double D_NS[], parameters param);
@@ -46,7 +47,7 @@ void cheb_initilization(double *&X, double **&T, double **&S_gg, double **&S_gS,
             S_NSNS[i][j] = 0; //initialization of S_NSNS_ij
         }
     }
-    cout << "-Tij calculated" << endl;
+    cout << "\n-Tij calculated" << endl;
 
     //Calculation of Sij : time independent matrix appearing in the differential equation
     if (eps==0)
@@ -59,9 +60,7 @@ void cheb_initilization(double *&X, double **&T, double **&S_gg, double **&S_gS,
 //Euler method to solve the differential equation, writing solutions
 void cheb_Euler(double *&X, double **&T, double *&D_g, double *&D_S, double *&D_NS, double **&S_gg, double **&S_gS, double **&S_SS, double **&S_Sg, double **&S_NSNS, ofstream &g_grid, ofstream &S_grid, ofstream &NS_grid, parameters param)
 {
-    double dD_g, dD_S, dD_NS, intD_g, intD_S, intD_NS;
-
-    int norm = param.norm;
+    double dD_g, dD_S, dD_NS;
 
     int N = param.Nx;
 
@@ -74,104 +73,88 @@ void cheb_Euler(double *&X, double **&T, double *&D_g, double *&D_S, double *&D_
     double C_g0 = param.C_g0;
     double C_S0 = param.C_S0;
     double C_NS0 = param.C_NS0;
+    bool initgrid = param.initgrid;
 
-    for (int t = 0; t < n_t; ++t)
+    //Initialisation of the solution
+    if (initgrid == 1) // initialisation with grid file
     {
-        // Euler method
-        ///////////////
+        string initgridname = param.initgridname;
+        ifstream initgrid_file;
+        initgrid_file.open(initgridname);
+
+        double D0x = 0;
         for (int k = 0; k < N; ++k)
         {
-            if (t==0)
+            initgrid_file >> D0x;
+
+            D_g[k] = C_g0*D0x; // gluon starting distribution
+            D_S[k] = C_S0*D0x; // Singlet starting distribution
+            D_NS[k] = C_NS0*D0x; // Non-singlet starting distribution
+        }
+        initgrid_file.close();
+    }
+    else if (Ieps == 0) // initialisation with narrow Gaussians
+    {
+        for (int k = 0; k < N; ++k)
+        {
+            D_g[k] = C_g0*D_t0_a(X[k],t0); // gluon starting distribution
+            D_S[k] = C_S0*D_t0_a(X[k],t0); // Singlet starting distribution
+            D_NS[k] = C_NS0*D_t0_a(X[k],t0); // Non-singlet starting distribution
+        }
+    }
+    else // initialisation analytical solution (of the simplified BDIM)
+    {
+        for (int k = 0; k < N; ++k)
+        {
+            D_g[k] = C_g0*D_t0_e(X[k], Ieps); // gluon starting distribution
+            D_S[k] = C_S0*D_t0_e(X[k], Ieps); // Singlet starting distribution
+            D_NS[k] = C_NS0*D_t0_e(X[k], Ieps); // Non-singlet starting distribution
+        }
+    }
+    // Writing of the initial solution
+    write_D(X, T, D_g, D_S, D_NS, t0, g_grid, S_grid, NS_grid, param);
+
+    // Euler method
+    ///////////////
+    for (int t = 1; t < n_t; ++t)
+    {
+        for (int k = 0; k < N; ++k)
+        {
+            //Calcualation of the fragmentation functions derivatives
+            dD_g = 0;
+            dD_S = 0;
+            dD_NS = 0;
+            for (int j = 0; j < N; ++j )
             {
-                D_g[k] = C_g0*D_t0_e(X[k], Ieps); // gluon starting distribution
-                D_S[k] = C_S0*D_t0_e(X[k], Ieps); // Singlet starting distribution
-                D_NS[k] = C_NS0*D_t0_e(X[k], Ieps); // Non-singlet starting distribution
+                dD_g += dt*S_gg[k][j]*D_g[j];
+                dD_g += dt*S_gS[k][j]*D_S[j];
+
+                dD_S += dt*S_SS[k][j]*D_S[j];
+                dD_S += dt*S_Sg[k][j]*D_g[j];
+
+                dD_NS += dt*S_NSNS[k][j]*D_NS[j];
             }
-            else
-            {//Calcualation of the fragmentation functions derivatives
-                dD_g = 0;
-                dD_S = 0;
-                dD_NS = 0;
-                for (int j = 0; j < N; ++j )
-                {
-                    dD_g += dt*S_gg[k][j]*D_g[j];
-                    dD_g += dt*S_gS[k][j]*D_S[j];
+            //Application of the Euler method at proper time t0+t*dt and on x=x_k
+            D_g[k] = D_g[k] + dD_g;
+            D_S[k] = D_S[k] + dD_S;
+            D_NS[k] = D_NS[k] + dD_NS;
 
-                    dD_S += dt*S_SS[k][j]*D_S[j];
-                    dD_S += dt*S_Sg[k][j]*D_g[j];
-
-                    dD_NS += dt*S_NSNS[k][j]*D_NS[j];
-                }
-                //Application of the Euler method at proper time t0+t*dt and on x=x_k
-                D_g[k] = D_g[k] + dD_g;
-                D_S[k] = D_S[k] + dD_S;
-                D_NS[k] = D_NS[k] + dD_NS;
-
-                //Force positivity of the coefficients
-                if (param.positivity)
-                {
-                    if (D_g[k] < 0)
-                        D_g[k] = 0;
-                    if (D_S[k] < 0)
-                        D_S[k] = 0;
-                    if (D_NS[k] < 0)
-                        D_NS[k] = 0;
-                }
+            //Force positivity of the coefficients
+            if (param.positivity)
+            {
+                if (D_g[k] < 0)
+                    D_g[k] = 0;
+                if (D_S[k] < 0)
+                    D_S[k] = 0;
+                if (D_NS[k] < 0)
+                    D_NS[k] = 0;
             }
         }
 
         // Writing the grids
         ////////////////////
         if (t%(n_t/n_t_w)==0)
-        {
-            // Not normalize solutions
-            if (norm == 0)
-            {//Writing of the solutions on grids
-                for (int k = 0; k < N; ++k)
-                {
-                    g_grid  << t0+t*dt << "\t" << X[k] << "\t" << D_g[k] << endl;
-                    S_grid  << t0+t*dt << "\t" << X[k] << "\t" << D_S[k] << endl;
-                    NS_grid << t0+t*dt << "\t" << X[k] << "\t" << D_NS[k] << endl;
-                }
-            }
-            // Normalized fragmentation functions
-            else
-            {
-                if ((norm == 1)||(norm == 2))
-                {
-                    //Calculating the integral of (D_g+D_S+D_NS) or (D_g+D_S+D_NS)/x depending on norm
-                    intD_g = normalize_D(X, T, D_g, D_S, D_NS, param);
-                    intD_S = intD_g;
-                    intD_NS = intD_g;
-                }
-                else if ((norm == 3)||(norm == 4))
-                {
-                    //Calculating the integral of D_f or D_f/x depending on norm
-                    intD_g = normalize_D(X, T, D_g, param);
-                    intD_S = normalize_D(X, T, D_S, param);
-                    intD_NS = normalize_D(X, T, D_NS, param);
-
-                    //the distributions are normalized except when they are null
-                    if (intD_g == 0)
-                        intD_g = 1.;
-                    if (intD_S == 0)
-                        intD_S = 1.;
-                    if (intD_NS == 0)
-                        intD_NS = 1.;
-                }
-
-                if (param.printintsig)
-                    cout << "Time : " << t0+t*dt << "\t\tTotal integral : " << intD_g << endl;
-
-                //Writing of the normalized solution on grids
-                for (int k = 0; k < N; ++k)
-                {
-                    g_grid  << t0+t*dt << "\t" << X[k] << "\t" << D_g[k]/intD_g << endl;
-                    S_grid  << t0+t*dt << "\t" << X[k] << "\t" << D_S[k]/intD_S << endl;
-                    NS_grid << t0+t*dt << "\t" << X[k] << "\t" << D_NS[k]/intD_NS << endl;
-                }
-            }
-        }
+            write_D(X, T, D_g, D_S, D_NS, t0+t*dt, g_grid, S_grid, NS_grid, param);
     }
 }
 
@@ -222,7 +205,7 @@ void cheb_init_S_chebint(double *&X, double **&T, double **&S_gg, double **&S_gS
             Xk1[i][j] = y_inv(node(N, i),X[j],1);
         }
     }
-    cout << "\n-Intermediate elements calculated";
+    cout << "-Intermediate elements calculated" << endl;
 
     for (int k = 0; k < N; ++k)
     {
@@ -243,10 +226,10 @@ void cheb_init_S_chebint(double *&X, double **&T, double **&S_gg, double **&S_gS
                     }
                     else
                     {
-                        I_g1[k][i] += 2*I*K_gg(Xk1[m][k])*(sqrt(Xk1[m][k])*cheb_T(i,y_(X[k]/Xk1[m][k],0,1))-Xk1[m][k]*T[i][k]);
-                        I_g4[k][i] += 2*I*K_gq(Xk1[m][k])*sqrt(Xk1[m][k])*cheb_T(i,y_(X[k]/Xk1[m][k],0,1));
-                        I_S1[k][i] += 2*I*K_qq(Xk1[m][k])*(sqrt(Xk1[m][k])*cheb_T(i,y_(X[k]/Xk1[m][k],0,1))-T[i][k]);
-                        I_S3[k][i] += 2*I*K_qg(Xk1[m][k])*sqrt(Xk1[m][k])*cheb_T(i,y_(X[k]/Xk1[m][k],0,1));
+                        I_g1[k][i] += 2.*I*K_gg(Xk1[m][k])*(sqrt(Xk1[m][k])*cheb_T(i,y_(X[k]/Xk1[m][k],0,1))-Xk1[m][k]*T[i][k]);
+                        I_g4[k][i] += 2.*I*K_gq(Xk1[m][k])*sqrt(Xk1[m][k])*cheb_T(i,y_(X[k]/Xk1[m][k],0,1));
+                        I_S1[k][i] += 2.*I*K_qq(Xk1[m][k])*(sqrt(Xk1[m][k])*cheb_T(i,y_(X[k]/Xk1[m][k],0,1))-T[i][k]);
+                        I_S3[k][i] += 2.*I*K_qg(Xk1[m][k])*sqrt(Xk1[m][k])*cheb_T(i,y_(X[k]/Xk1[m][k],0,1));
                     }
 
                     if (i==0)
@@ -369,7 +352,7 @@ void cheb_init_S_chebint_log(double *&X, double **&T, double **&S_gg, double **&
             Xk1[i][j] = y_inv(node(N, i),X[j],1);
         }
     }
-    cout << "\n-Intermediate elements calculated";
+    cout << "-Intermediate elements calculated" << endl;
 
     for (int k = 0; k < N; ++k)
     {
@@ -390,10 +373,10 @@ void cheb_init_S_chebint_log(double *&X, double **&T, double **&S_gg, double **&
                     }
                     else
                     {
-                        I_g1[k][i] += 2*I*K_gg(Xk1[m][k])*(sqrt(Xk1[m][k])*cheb_T(i,y_log(X[k]/Xk1[m][k],eps,1))-Xk1[m][k]*T[i][k]);
-                        I_g4[k][i] += 2*I*K_gq(Xk1[m][k])*sqrt(Xk1[m][k])*cheb_T(i,y_log(X[k]/Xk1[m][k],eps,1));
-                        I_S1[k][i] += 2*I*K_qq(Xk1[m][k])*(sqrt(Xk1[m][k])*cheb_T(i,y_log(X[k]/Xk1[m][k],eps,1))-T[i][k]);
-                        I_S3[k][i] += 2*I*K_qg(Xk1[m][k])*sqrt(Xk1[m][k])*cheb_T(i,y_log(X[k]/Xk1[m][k],eps,1));
+                        I_g1[k][i] += 2.*I*K_gg(Xk1[m][k])*(sqrt(Xk1[m][k])*cheb_T(i,y_log(X[k]/Xk1[m][k],eps,1))-Xk1[m][k]*T[i][k]);
+                        I_g4[k][i] += 2.*I*K_gq(Xk1[m][k])*sqrt(Xk1[m][k])*cheb_T(i,y_log(X[k]/Xk1[m][k],eps,1));
+                        I_S1[k][i] += 2.*I*K_qq(Xk1[m][k])*(sqrt(Xk1[m][k])*cheb_T(i,y_log(X[k]/Xk1[m][k],eps,1))-T[i][k]);
+                        I_S3[k][i] += 2.*I*K_qg(Xk1[m][k])*sqrt(Xk1[m][k])*cheb_T(i,y_log(X[k]/Xk1[m][k],eps,1));
                     }
 
                     if (i==0)
@@ -523,6 +506,60 @@ double normalize_D(double *&X, double **&T, double D_g[], double D_S[], double D
     }
 
     return intD;
+}
+
+// Add the lines "X[k] D[k]" to g_grid
+void write_D(double *&X, double **&T, double *&D_g, double *&D_S, double *&D_NS, double t, ofstream &g_grid, ofstream &S_grid, ofstream &NS_grid, parameters param)
+{
+    double intD_g, intD_S, intD_NS;
+
+    // Not normalize solutions
+    if (param.norm == 0)
+    {//Writing of the solutions on grids
+        for (int k = 0; k < param.Nx; ++k)
+        {
+            g_grid  << t << "\t" << X[k] << "\t" << D_g[k] << endl;
+            S_grid  << t << "\t" << X[k] << "\t" << D_S[k] << endl;
+            NS_grid << t << "\t" << X[k] << "\t" << D_NS[k] << endl;
+        }
+    }
+    // Normalized fragmentation functions
+    else
+    {
+        if ((param.norm == 1)||(param.norm == 2))
+        {
+            //Calculating the integral of (D_g+D_S+D_NS) or (D_g+D_S+D_NS)/x depending on norm
+            intD_g = normalize_D(X, T, D_g, D_S, D_NS, param);
+            intD_S = intD_g;
+            intD_NS = intD_g;
+        }
+        else if ((param.norm == 3)||(param.norm == 4))
+        {
+            //Calculating the integral of D_f or D_f/x depending on norm
+            intD_g = normalize_D(X, T, D_g, param);
+            intD_S = normalize_D(X, T, D_S, param);
+            intD_NS = normalize_D(X, T, D_NS, param);
+
+            //the distributions are normalized except when they are null
+            if (intD_g == 0)
+                intD_g = 1.;
+            if (intD_S == 0)
+                intD_S = 1.;
+            if (intD_NS == 0)
+                intD_NS = 1.;
+        }
+
+        if (param.printintsig)
+            cout << "Time : " << t << "\t\tTotal integral : " << intD_g << endl;
+
+        //Writing of the normalized solution on grids
+        for (int k = 0; k < param.Nx; ++k)
+        {
+            g_grid  << t << "\t" << X[k] << "\t" << D_g[k]/intD_g << endl;
+            S_grid  << t << "\t" << X[k] << "\t" << D_S[k]/intD_S << endl;
+            NS_grid << t << "\t" << X[k] << "\t" << D_NS[k]/intD_NS << endl;
+        }
+    }
 }
 
 // Calculation of the integral of D or D/x over x

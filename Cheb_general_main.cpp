@@ -9,18 +9,20 @@
 //The resolution of the evolution equations is done by expanding the distribution functions in
 //Chebyshev polynomials and the time differential equation is solved by a simple Euler method.
 //
-//The result is given as a grid in x and t. The point in x are the nodes of the Chebyshev polynomials.
+//The result is given as a grid in x and t. The points in x are the nodes of the Chebyshev polynomials.
 
 
 #include <iostream>
 #include <sstream>
 #include <fstream>
 #include <string>
+#include  <string.h>
 using namespace std;
 
 const long double M_PI = 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679;
 const int Nc = 3; //Number of colors
 const int Nf = 3; //Number of active quark flavors
+//Casimir operators
 const double C_A = Nc;
 const double C_F = (Nc*Nc-1)/2./Nc;
 const double T_F = .5;
@@ -31,48 +33,117 @@ const double T_F = .5;
 #include "Cheb_method_g_S_NS.h" //file containing functions related to the resolution method for the system of equations on g, S and NS FF
 #include "Cheb_method_g.h" //file containing functions related to the resolution method for the pure gluon case
 
-void parameters_from_file(int *N, double *t0, double *dt, int *n_t, int *n_t_w, double *eps);
-void cheb_write_grid_header(int N, double eps, ofstream &grid);
-int main_g(parameters param);
-int main_g_S_NS(parameters param);
+int program_init(string parametersfile); //reading of the parameters (with the choice of the BDIM equation to solve)
+int program_g(parameters param);
+int program_g_S_NS(parameters param);
+int help(void); //help display
 
-int main(void)
+//argument management
+int main(int argc, char** argv)
+{
+    if (argc == 1)
+        //launch the program with default value for the name of the parameters file
+        program_init("Parameters");
+    else if (argc == 2)
+    {
+        //if (argv[1] == "help")
+        if (strcmp(argv[1], "help")==0)
+            //display help
+            help();
+        else
+        {
+            //launch the program with specified name of the parameters file
+            return program_init(argv[1]);
+        }
+    }
+    else
+    {
+        //wrong input display
+        cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
+        cout << "!!  /!\\ Wrong argument(s)  !!" << endl;
+        cout << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << endl;
+
+        cout << "\nThis program should be launched with either :" << endl;
+        cout << "-no argument (parameters are initialized from the file 'Parameters') :" << endl;
+        cout << "\t" << argv[0] << endl;
+        cout << "-the name of the parameters file to be use in argument :" << endl;
+        cout << "\t" << argv[0] << " 'parameterfile'" << endl;
+        cout << "-help argument to display help :" << endl;
+        cout << "\t" << argv[0] << " help" << endl;
+    }
+    return 1;
+}
+
+//help
+int help(void)
+{
+    cout << "\n#////////////#" << endl;
+    cout << "#//  Help  //#" << endl;
+    cout << "#/////////////////////////////////////////////#" << endl;
+
+    cout << "# This program calculates solution of the integrated BDIM equations either accounting for quarks in the cascade or not." << endl;
+    cout << "# The fragmentation functions are evolved from an initial distribution, during a time tau." << endl;
+    cout << "# The solutions are then given in terms of grids on the nodes of the Nth Chebyshev polynomial in x and using a regular spacing in time." << endl;
+    cout << "#" << endl;
+    cout << "# More details on the parameters are given in the file 'Parameters' and in the manual." << endl;
+    cout << "#" << endl;
+    cout << "# The results are given in either 2 files for gluon dominated cascades." << endl;
+    cout << "# These files are the gluon fragmentation function D_g and the parameter file used to produce it, with suffixes as follow : " << endl;
+    cout << "# -'gonly' for D_g as a 3 column grid (tau, x, D_g(x,tau))" << endl;
+    cout << "# -'_parameters' for the parameter file (written as parameters appear in the console when they are read)" << endl;
+    cout << "#" << endl;
+    cout << "# In the case accounting for quarks in the cascades, 4 files are created." << endl;
+    cout << "# These files are the gluon/color singlet/color non singlet fragmentation function D_g/D_S/D_NS and the parameter file used to produce them, with suffixes as follow : " << endl;
+    cout << "# -'g' for D_g as a 3 column grid (tau, x, D_g(x,tau))" << endl;
+    cout << "# -'S' for D_S as a 3 column grid (tau, x, D_S(x,tau))" << endl;
+    cout << "# -'NS' for D_NS as a 3 column grid (tau, x, D_NS(x,tau))" << endl;
+    cout << "# -'_parameters' for the parameter file (written as parameters appear in the console when they are read)" << endl;
+    cout << "#" << endl;
+    cout << "# The program should be launched either with the name of the parameters file in argument or without argument." << endl;
+    cout << "# In this case, parameters are read from the file 'Parameters' if present or set to default values." << endl;
+
+    cout << "#/////////////////////////////////////////////#\n" << endl;
+
+    return 0;
+}
+
+int program_init(string parametersfile)
 {
     //Parameters reading
     ////////////////////
     parameters param;
-    param.from_file("Parameters");
+    param.from_file(parametersfile);
 
-    int evo = param.evo;
+    int evo = param.evo; // type of cascade
 
-    if (evo == 0)
-        main_g(param);
+    if ((evo == 0)||(evo == 2))
+        program_g(param);
     else if (evo == 1)
-        main_g_S_NS(param);
+        program_g_S_NS(param);
     else
     {
         cout << "\n# /!\\ Wrong parameter 'evo' : " << evo << endl;
-        cout << "# Should be set to 0 or 1 : " << endl;
+        cout << "# Should be set to 0 or 1" << endl;
         cout << "# Program stopped" << endl;
         return 1;
     }
     return 0;
 }
 
-int main_g(parameters param)
+int program_g(parameters param)
 {
     //Parameters initialization
     ///////////////////////////
     int Nx = param.Nx;
     int n_t = param.Nt;
     int n_t_w = param.Nt_w;
-    double t0 = param.t0;
-    double dt = param.dt;
-    double eps = param.eps;
+
+    if (n_t_w>n_t)
+        n_t_w = n_t;
 
     //Memory allocation
     ///////////////////
-    cout << "\n-Memory allocation";
+    cout << "\n-Memory allocation" << endl;
     double *D = new double[Nx]; //Fragmentation function D_i,t=D(x_i,t_0+dt*t)
     double **T = new double*[Nx]; //Chebyshev polynomial i evaluated on node j
     double *X = new double[Nx]; //Images of the roots of T_N
@@ -84,12 +155,12 @@ int main_g(parameters param)
         S[i] = new double[Nx];
     }
 
-    cout << "\n*Memory allocated*";
+    cout << "*Memory allocated*" << endl;
 
     //Initialization (time independent matrix calculation)
     ////////////////
     cheb_initilization_g(X, T, S, param);
-    cout << "\n*Initialization done*";
+    cout << "*Initialization done*" << endl;
 
     //Grid files preparation
     ////////////////////////
@@ -98,47 +169,44 @@ int main_g(parameters param)
 
     param.write();
     D_grid.open(filename+"gonly", ios::out);
-    cout << "\n\nGrid file created";
+    cout << "\nGrid file created" << endl;
 
     //Euler method
     //////////////
-    cout << "\n\nEuler method launched";
+    cout << "\nEuler method launched" << endl;
     cheb_Euler_g(X, T, D, S, D_grid, param);
-    cout << "\n*Equation solved*";
+    cout << "*Equation solved*" << endl;
 
     //Memory liberation
     ///////////////////
     D_grid.close();
-    cout << "\n\n*Grid file closed*";
+    cout << "\n*Grid file closed*" << endl;
     for (int i = 0; i < Nx; ++i)
         delete[] S[i];
     delete[] S;
     delete[] D;
     delete[] X;
 
-    cout << "\n\n*Freed memory*\n";
+    cout << "\n*Freed memory*" << endl;
 
 
     return 0;
 }
 
-int main_g_S_NS(parameters param)
+int program_g_S_NS(parameters param)
 {
     //Parameters initialization
     ///////////////////////////
     int Nx = param.Nx;
     int n_t = param.Nt;
     int n_t_w = param.Nt_w;
-    double t0 = param.t0;
-    double dt = param.dt;
-    double eps = param.eps;
 
     if (n_t_w>n_t)
         n_t_w = n_t;
 
     //Memory allocation
     ///////////////////
-    cout << "\n-Memory allocation";
+    cout << "\n-Memory allocation" << endl;
     double *D_g = new double[Nx]; //Gluon fragmentation function D_i,t=D(x_i,t_0+dt*t)
     double *D_S = new double[Nx]; //Singlet fragmentation function D_i,t=D(x_i,t_0+dt*t)
     double *D_NS = new double[Nx]; //Non-singlet fragmentation function D_i,t=D(x_i,t_0+dt*t)
@@ -159,12 +227,12 @@ int main_g_S_NS(parameters param)
         S_Sg[i] = new double[Nx];
         S_NSNS[i] = new double[Nx];
     }
-    cout << "\n*Memory allocated*";
+    cout << "\n*Memory allocated*" << endl;
 
     //Initialization (time independent matrix calculation)
     ////////////////
     cheb_initilization(X, T, S_gg, S_gS, S_SS, S_Sg, S_NSNS, param);
-    cout << "\n*Initialization done*";
+    cout << "\n*Initialization done*" << endl;
 
     //Grid files preparation
     ////////////////////////

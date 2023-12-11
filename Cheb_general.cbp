@@ -31,6 +31,12 @@
 		<Compiler>
 			<Add option="-Wall" />
 		</Compiler>
+		<Unit filename="Cheb_functions.h" />
+		<Unit filename="Cheb_general.cbp" />
+		<Unit filename="Cheb_general_main.cpp" />
+		<Unit filename="Cheb_method_g.h" />
+		<Unit filename="Cheb_method_g_S_NS.h" />
+		<Unit filename="Cheb_parameters.h" />
 		<Extensions />
 	</Project>
 </CodeBlocks_project_file>

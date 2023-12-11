@@ -34,29 +34,39 @@ class parameters
         int Nx; //Number of Chebychev nodes for the integration in x
         double eps; //low-x cut-off when using logarithmic bijection
 
-        //Euller method
+        //Euler method
         int Nt; // Number point in time for the Euler method
         int Nt_w; // number of points in time used for the result grid
         double t0; // initial time of the evolution
         double dt; //  time step
 
         //Initial distributions
-        double Ieps; // Width of the initial distribution : a Gaussian peaked on x=1
+        double Ieps; // Width of the initial distribution : a Gaussian peaked on x=1 or the analytical solution to the simplified BDIM if set to 0
         double C_g0; // Initial gluon distribution (coefficient in front of the Gaussian)
         double C_S0; // Initial quark singlet distribution (coefficient in front of the Gaussian)
         double C_NS0; // Initial quark non-singlet distribution (coefficient in front of the Gaussian)
+        bool initgrid; // Set to 0, the initial distribution is described by the previous parameters, set to 1 its uses a grid
+        string initgridname; // name of the grid to use when initgrid is set to 1
+
 
         string gridname; //name to be used for the result grid
 
         //internal parameters
         //bool printig = false; // option for printing D(x, t) when put in grids
         bool printintsig = false; // option for printing the integral of D(x) when calculated
-        bool paramfromfile;
+        bool paramsfromfile;
 
         void from_file(string filename); // initialize parameters from a parameter file
         void default_(); // initialize parameters with default values
         void show(); // Display parameters in the class
         void write(); // Write parameters in a file
+
+        //Parameters trackers
+        //(track if parameters are set from default values or from file)
+        int N_param = 16; //number of initial parameters
+        bool *paramfromfile = new bool[N_param]; //parameters that are set through file
+        int Nparamfromfile = 0; //number of parameters set through parameter file
+        string *paramfromfile_name = new string[N_param]; //name (string) of the parameters
 };
 
 
@@ -80,49 +90,143 @@ void parameters::from_file(string filename)
                 if (line[0]=='e' && line[1]=='v' && line[2]=='o')
                 {
                     evo = paramstr2int(line);
-                    if (!(evo == 0) && !(evo == 1))
+                    paramfromfile[2] = true;
+                    Nparamfromfile++;
+                    if (!(evo == 0) && !(evo == 1)&& !(evo == 2))
+                    {
                         evo = 1;
+                        paramfromfile[2] = false;
+                        Nparamfromfile--;
+                    }
                 }
 
                 if (line[0]=='n' && line[1]=='o' && line[2]=='r' && line[3]=='m')
                 {
                     norm = paramstr2int(line);
+                    paramfromfile[0] = true;
+                    Nparamfromfile++;
                     if (!(norm == 0) && !(norm == 1) && !(norm == 2) && !(norm == 3) && !(norm == 4))
+                    {
                         norm = 0;
+                        paramfromfile[0] = true;
+                        Nparamfromfile--;
+                    }
                 }
                 if (line[0]=='p' && line[1]=='o' && line[2]=='s' && line[3]=='i' && line[4]=='t' && line[5]=='i' && line[6]=='v' && line[7]=='i' && line[8]=='t' && line[9]=='y')
+                {
                     positivity = paramstr2bool(line);
+                    paramfromfile[1] = true;
+                    Nparamfromfile++;
+                }
 
                 if (line[0]=='N' && line[1]=='x')
+                {
                     Nx = paramstr2int(line);
+                    paramfromfile[3] = true;
+                    Nparamfromfile++;
+                    if (Nx == 0)
+                    {
+                        Nx = 1;
+                        paramfromfile[3] = true;
+                        Nparamfromfile--;
+                    }
+                }
                 if (line[0]=='e' && line[1]=='p' && line[2]=='s')
+                {
                     eps = paramstr2double(line);
+                    paramfromfile[4] = true;
+                    Nparamfromfile++;
+                }
 
                 if (line[0]=='t'&& line[1]=='a' && line[2]=='u' && line[3]=='0')
+                {
                     t0 = paramstr2double(line);
+                    paramfromfile[7] = true;
+                    Nparamfromfile++;
+                }
                 if (line[0]=='d' && line[1]=='t' && line[2]=='a' && line[3]=='u')
+                {
                     dt = paramstr2double(line);
+                    paramfromfile[8] = true;
+                    Nparamfromfile++;
+                }
                 if (line[0]=='N' && line[1]=='t' && line[2]=='a' && line[3]=='u')
+                {
                     Nt = paramstr2double(line);
+                    paramfromfile[5] = true;
+                    Nparamfromfile++;
+                }
                 if (line[0]=='F' && line[1]=='t' && line[2]=='a' && line[3]=='u')
-                    Nt = ceil((paramstr2double(line)-t0)/dt);
+                {
+                    double Ft = paramstr2double(line);
+                    Nt = ceil((Ft-t0)/dt);
+                    cout << "Ntau obtained using : Ftau = " << Ft << ", tau0 = "<< t0 << ", dtau = "<< dt << endl;
+                    paramfromfile[5] = true;
+                    Nparamfromfile++;
+                }
                 if (line[0]=='N' && line[1]=='t' && line[2]=='_' && line[3]=='w')
+                {
                     Nt_w = paramstr2double(line);
+                    paramfromfile[6] = true;
+                    Nparamfromfile++;
+                }
 
                 if (line[0]=='I' && line[1]=='e' && line[2]=='p' && line[3]=='s')
+                {
                     Ieps = paramstr2double(line);
+                    paramfromfile[9] = true;
+                    Nparamfromfile++;
+                }
                 if (line[0]=='C' && line[1]=='_' && line[2]=='g' && line[3]=='0')
+                {
                     C_g0 = paramstr2double(line);
+                    paramfromfile[10] = true;
+                    Nparamfromfile++;
+                }
                 if (line[0]=='C' && line[1]=='_' && line[2]=='S' && line[3]=='0')
+                {
                     C_S0 = paramstr2double(line);
+                    paramfromfile[11] = true;
+                    Nparamfromfile++;
+                }
                 if (line[0]=='C' && line[1]=='_' && line[2]=='N' && line[3]=='S' && line[4]=='0')
+                {
                     C_NS0 = paramstr2double(line);
+                    paramfromfile[12] = true;
+                    Nparamfromfile++;
+                }
+                if (line[0]=='i' && line[1]=='n' && line[2]=='i' && line[3]=='t' && line[4]=='g' && line[5]=='r' && line[6]=='i' && line[7]=='d')
+                {
+                    initgrid = paramstr2bool(line);
+                    paramfromfile[13] = true;
+                    Nparamfromfile++;
+                }
+                if (line[0]=='i' && line[1]=='n' && line[2]=='i' && line[3]=='t' && line[4]=='g' && line[5]=='r' && line[6]=='i' && line[7]=='d' && line[8]=='n' && line[9]=='a' && line[10]=='m' && line[11]=='e')
+                {
+                    initgridname = paramstr2str(line);
+                    ifstream initgrid_file;
+                    initgrid_file.open(initgridname);
+                    paramfromfile[14] = true;
+                    Nparamfromfile++;
+
+                    if (!(initgrid_file.is_open())) //verification that the file has been found
+                    {
+                        initgrid = 0; //if not, initial distribution is set from parameters
+                        paramfromfile[14] = false;
+                        Nparamfromfile--;
+                    }
+                    initgrid_file.close();
+                }
 
                 if (line[0]=='g' && line[1]=='r' && line[2]=='i' && line[3]=='d' && line[4]=='n' && line[5]=='a' && line[6]=='m' && line[7]=='e')
+                {
                     gridname = paramstr2str(line);
+                    paramfromfile[15] = true;
+                    Nparamfromfile++;
+                }
             }
         }
-        paramfromfile = true;
+        paramsfromfile = true;
     }
     else
         paramfromfile = false;
@@ -152,8 +256,31 @@ void parameters::default_()
     C_g0 = 1.;
     C_S0 = 0;
     C_NS0 = 0;
+    initgrid = false;
+    initgridname = "resultgrid_";
 
     gridname = "Results/D_cheb";
+
+
+    //initialization of the trackers
+    for (int i = 0; i < N_param; ++i)
+        paramfromfile[i] = false;
+    paramfromfile_name[0] = "norm";
+    paramfromfile_name[1] = "positivity";
+    paramfromfile_name[2] = "evo";
+    paramfromfile_name[3] = "Nx";
+    paramfromfile_name[4] = "eps";
+    paramfromfile_name[5] = "Ntau";
+    paramfromfile_name[6] = "Nt_w";
+    paramfromfile_name[7] = "tau0";
+    paramfromfile_name[8] = "dtau";
+    paramfromfile_name[9] = "Ieps";
+    paramfromfile_name[10] = "C_g0";
+    paramfromfile_name[11] = "C_S0";
+    paramfromfile_name[12] = "C_NS0";
+    paramfromfile_name[13] = "initgrid";
+    paramfromfile_name[14] = "initgridname";
+    paramfromfile_name[15] = "gridname";
 }
 
 //Display the parameters
@@ -177,6 +304,8 @@ void parameters::show()
         cout << "Pure gluons" << endl;
     else if (evo == 1)
         cout << "Quarks and gluons" << endl;
+    else if (evo == 2)
+        cout << "Pure gluons with simplified kernel" << endl;
 
     cout << "#" << endl;
 
@@ -203,7 +332,10 @@ void parameters::show()
 
     cout << "#Chebyshev method :" << endl;
     cout << "# -Nx = " << Nx << endl;
-    cout << "# -eps = " << eps << endl;
+    if (eps>0)
+        cout << "# -logarithmic bijection y: [" << eps << ", 1] -> [-1, 1]" << endl;
+    else if (eps==0)
+        cout << "# -linear bijection y: [0, 1] -> [-1, 1]" << endl;
 
     cout << "#" << endl;
 
@@ -216,23 +348,48 @@ void parameters::show()
     cout << "#" << endl;
 
     cout << "#Initial distributions :" << endl;
-    cout << "# -Ieps = " << Ieps << endl;
-    if (evo == 0)
-        cout << "# -C_g0 = " << "1" << endl;
-    if (evo == 1)
+    if (initgrid)
+        cout << "# Initial solution set from the grid : " << initgridname << endl;
+    else
     {
-        cout << "# -C_g0 = " << C_g0 << endl;
-        cout << "# -C_S0 = " << C_S0 << endl;
-        cout << "# -C_NS0 = " << C_NS0 << endl;
+        cout << "# -Ieps = " << Ieps << endl;
+        if (evo == 0)
+            cout << "# -C_g0 = " << "1" << endl;
+        if (evo == 1)
+        {
+            cout << "# -C_g0 = " << C_g0 << endl;
+            cout << "# -C_S0 = " << C_S0 << endl;
+            cout << "# -C_NS0 = " << C_NS0 << endl;
+        }
     }
 
     cout << "#" << endl;
 
     cout << "# -gridname = " << gridname << endl;
     cout << "#/////////////////////////////////////////////#" << endl;
+
+    if ((paramfromfile)&&(Nparamfromfile<N_param))
+    {
+        cout << "\n\nNparamfromfile-N_param = " << Nparamfromfile-N_param+1 << endl;
+        cout << "\n\n/!\\ The following parameters have been set with default value (either not found / not set / not recognized / no proper argument) : " << endl;
+        cout << "-";
+        int Nparamprint = 0;
+        for (int i = 0; i < N_param; ++i)
+        {
+            if (!paramfromfile[i])
+            {
+                cout << paramfromfile_name[i];
+                Nparamprint++;
+                if (Nparamprint < N_param-Nparamfromfile+1)
+                    cout << ", ";
+                else
+                    cout << endl << endl << endl;
+            }
+        }
+    }
 }
 
-//Display the parameters
+//Save the parameters in a file
 void parameters::write()
 {
     ofstream param_file;
@@ -250,6 +407,8 @@ void parameters::write()
         param_file << "Pure gluons" << endl;
     else if (evo == 1)
         param_file << "Quarks and gluons" << endl;
+    else if (evo == 2)
+        param_file << "Pure gluons with simplified kernel" << endl;
 
     param_file << "#" << endl;
 
@@ -289,14 +448,19 @@ void parameters::write()
     param_file << "#" << endl;
 
     param_file << "#Initial distributions :" << endl;
-    param_file << "# -Ieps = " << Ieps << endl;
-    if (evo == 0)
-        param_file << "# -C_g0 = " << "1" << endl;
-    if (evo == 1)
+    if (initgrid)
+        param_file << "# Initial solution set from the grid : " << initgridname << endl;
+    else
     {
-        param_file << "# -C_g0 = " << C_g0 << endl;
-        param_file << "# -C_S0 = " << C_S0 << endl;
-        param_file << "# -C_NS0 = " << C_NS0 << endl;
+        param_file << "# -Ieps = " << Ieps << endl;
+        if (evo == 0)
+            param_file << "# -C_g0 = " << "1" << endl;
+        if (evo == 1)
+        {
+            param_file << "# -C_g0 = " << C_g0 << endl;
+            param_file << "# -C_S0 = " << C_S0 << endl;
+            param_file << "# -C_NS0 = " << C_NS0 << endl;
+        }
     }
 
     param_file << "#" << endl;
